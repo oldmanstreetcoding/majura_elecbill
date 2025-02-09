@@ -1,0 +1,29 @@
+<nav class="navbar navbar-expand-lg navbar-light">
+    <div class="container-fluid">
+        <!-- App Title -->
+        <span class="navbar-brand text-primary app-title">
+            <h4 style="margin-top: 15px;font-weight: bold;">Electricity Bill Management</h4>
+        </span>
+        
+        <ul class="navbar-nav ms-auto">
+            <!-- Dropdown -->
+            <li class="nav-item dropdown">
+                <a 
+                    class="nav-link dropdown-toggle" 
+                    href="#" 
+                    id="profileDropdown" 
+                    role="button" 
+                    data-bs-toggle="dropdown" 
+                    aria-expanded="false" 
+                    onclick="toggleAppTitle()"
+                >
+                    <span id="user-name" class="text-primary"></span> <i class="bi bi-person-circle"></i>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="profileDropdown">
+                    <li><a class="dropdown-item" href="settings.html">Settings</a></li>
+                    <li><a class="dropdown-item" href="#" onclick="logout()">Logout</a></li>
+                </ul>
+            </li>
+        </ul>
+    </div>
+</nav>

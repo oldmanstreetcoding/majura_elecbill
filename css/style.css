@@ -1,0 +1,148 @@
+body {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+    margin: 0;
+}
+.sidebar {
+    width: 200px;
+    background: #2076cc;
+    color: white;
+    padding-top: 20px;
+    height: 100%; /* Makes the sidebar occupy full vertical height */
+    flex-shrink: 0; /* Prevents shrinking */
+    display: flex;
+    flex-direction: column; /* Ensures items stack vertically */
+    transition: transform 0.3s ease-in-out; /* Smooth transition for showing/hiding */
+}
+.sidebar.hidden {
+    transform: translateX(-100%); /* Hide sidebar */
+}
+.sidebar a {
+    color: white;
+    text-decoration: none;
+    padding: 10px 15px;
+    display: block;
+}
+.sidebar a:hover {
+    background: #495057;
+}
+.content {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 0px;
+    display: flex;
+    flex-direction: column;
+}
+.container{
+   margin-left:15px;
+}
+.navbar {
+    background: #f8f9fa;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 15px;
+    box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1);
+}
+.navbar-nav {
+    display: flex;
+    align-items: center;
+}
+.app-title.hidden {
+    display: none; /* Hide app title when toggled */
+}
+/* Ensure dropdown menu is on top layer */
+.navbar .dropdown-menu {
+    z-index: 999; /* Topmost layer */
+    position: absolute; /* Avoid affecting layout below */
+    top: 100%; /* Aligns right below the toggle */
+    transform: translateY(-5px); /* Slight adjustment for better spacing */
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1); /* Add subtle shadow */
+}
+.nav-item .dropdown-toggle {
+    font-size: 1rem; /* Default size for user info */
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.bi-person-circle {
+    font-size: 1.5rem; /* Icon size */
+}
+.dropdown-menu {
+    min-width: 150px; /* Adjust dropdown width */
+    margin-top: 0; /* Prevents dropdown from affecting avatar position */
+}
+#footer-placeholder {
+    margin-top: auto; /* Pushes the footer to the bottom of the content area */
+    text-align: center;
+    padding: 10px 0;
+    background-color: #f8f9fa;
+    border-top: 1px solid #ddd;
+}
+.form-container {
+    margin: 20px 0;
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #f9f9f9;
+}
+.table-container {
+    margin-top: 20px;
+}
+.hamburger-menu {
+    display: none;
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: #2076cc;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding-left: 10px;
+    padding-right: 10px;
+    z-index: 999;
+}
+.hamburger-menu .bi {
+    font-size: 1.5rem;
+}
+
+.app-subtitle{
+    font-weight: bold;
+}
+/* Media query for mobile screens */
+@media (max-width: 768px) {
+    .sidebar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+        z-index: 1000;
+    }
+    .hamburger-menu {
+        display: block;
+    }
+    .content {
+        padding-left: 20px;
+    }
+    .navbar-brand h4 {
+        font-size: 1rem; /* Reduce font size for title */
+        margin-left: 30px;
+    }
+
+    .navbar-nav .dropdown-toggle {
+        font-size: 0.875rem; /* Adjust user info font size */
+    }
+
+    .bi-person-circle {
+        font-size: 1.25rem; /* Adjust icon size for mobile */
+    }
+
+    .container-fluid {
+        padding-left: 5px; /* Reduce padding for mobile view */
+        padding-right: 5px;
+    }
+    .container{
+        margin-left:-10px;
+     }
+}

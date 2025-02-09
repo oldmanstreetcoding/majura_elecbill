@@ -1,0 +1,13 @@
+# Ignore folders
+archive/
+dockerize/
+
+# Ignore specific files
+.env
+majura184formbill-ee82822f4fa4.json
+
+# Ignore system files and logs (optional but recommended)
+*.log
+*.tmp
+.DS_Store
+Thumbs.db

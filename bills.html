@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Majura184: Manage Bills</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .badge.bg-secondary {
+            background-color: #6c757d;
+        }
+
+        .badge.bg-success {
+            background-color: #28a745;
+        }
+
+        .badge.bg-danger {
+            background-color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <button class="hamburger-menu" onclick="toggleSidebar()">
+        <i class="bi bi-list"></i>
+    </button>
+    <div id="sidebar-placeholder" class="sidebar"></div>
+
+    <!-- Main Content -->
+    <div class="content">
+        <!-- Navbar -->
+        <div id="navbar-placeholder"></div>
+
+        <!-- Page-Specific Content -->
+        <div class="container mt-4">
+            <h3 class="app-subtitle">Manage Bills</h3>
+            <div class="form-container">
+                <h5>Add New Bill</h5>
+                <form id="bill-form">
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label for="start-date" class="form-label">Start Date</label>
+                            <input type="date" id="start-date" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="end-date" class="form-label">End Date</label>
+                            <input type="date" id="end-date" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="due-date" class="form-label">Due Date</label>
+                            <input type="date" id="due-date" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="bill-total" class="form-label">Bill Total</label>
+                            <input type="number" id="bill-total" class="form-control form-control-sm" step="0.01" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add Bill</button>
+                </form>
+            </div>
+
+            <div class="table-container mt-4" style="overflow-x: scroll;">
+                <h5 class="app-subtitle">Bills List</h5>
+                <table class="table table-bordered table-sm">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Start Date</th>
+                            <th>End Date</th>
+                            <th>Due Date</th>
+                            <th>Bill Total</th>
+                            <th>Compliance</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bills-table-body">
+                        <!-- Bills will be dynamically added here -->
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+
+        <!-- Footer -->
+        <div id="footer-placeholder"></div>
+    </div>
+
+    <script>
+
+        var stDev = false;
+        var urlAPI='';
+        var mainURL='';
+
+        if(stDev) {
+            urlAPI = 'http://127.0.0.1:5000/';
+            mainURL = 'http://127.0.0.1:3000/';
+        } else {
+            urlAPI = 'https://elecbill-app-latest.onrender.com/';
+            mainURL = 'http://127.0.0.1:3000/';
+        }        
+        
+        // Load reusable components
+        async function loadComponents() {
+            try {
+                const isLoggedIn = localStorage.getItem('isLoggedIn');
+                const username = localStorage.getItem('username');
+
+                if (!isLoggedIn) {
+                    window.location.href = 'login.html';
+                    return;
+                }
+
+                const navbar = await fetch('navbar.html').then((res) => res.text());
+                const sidebar = await fetch('sidebar.html').then((res) => res.text());
+                const footer = await fetch('footer.html').then((res) => res.text());
+
+                document.getElementById('navbar-placeholder').innerHTML = navbar;
+                document.getElementById('sidebar-placeholder').innerHTML = sidebar;
+                document.getElementById('footer-placeholder').innerHTML = footer;
+
+                document.getElementById('user-name').innerText = username;
+                populateSidebar();
+
+                // Hide sidebar on mobile
+                if (window.innerWidth <= 768) {
+                    document.getElementById('sidebar-placeholder').classList.add('hidden');
+                }
+            } catch (error) {
+                console.error('Failed to load components:', error);
+                alert('An error occurred while loading the page. Please try again later.');
+            }
+
+            fetchBills(); // Fetch and display bills on page load
+        }
+
+        // Utility function to format date
+        function formatDate(dateString) {
+            const [year, month, day] = dateString.split('-');
+            return `${day}-${month}-${year}`;
+        }
+
+        // Utility function to format date
+        function revFormatDate(dateString) {
+            const [day, month, year] = dateString.split('-');
+            return `${year}-${month}-${day}`;
+        }
+
+        // Update the fetchBills function to include the Due Date column
+        // Fetch and display bills with compliance data
+        async function fetchBills() {
+            const response = await fetch(urlAPI+'bills');
+            const billsData = await response.json();
+
+            const usersResponse = await fetch(urlAPI+'users');
+            const usersData = await usersResponse.json();
+
+            const paymentsData = await fetchPayments();
+
+            if (billsData.success && usersData.success && paymentsData.success) {
+                const billsTableBody = document.getElementById('bills-table-body');
+                billsTableBody.innerHTML = '';
+
+                billsData.bills.forEach((bill, index) => {
+                    const billPeriod = `${bill.start_date} to ${bill.end_date}`;
+                    const dueDate = bill.due_date;
+
+                    let complianceHTML = '<ul>';
+                    bill.compliance.forEach((compliance) => {
+                        let statusHTML;
+                        if (compliance.status === "Zero Bill") {
+                            statusHTML = `<span class="badge bg-info">Zero Bill</span>`;
+                        } else if (compliance.status === "On-Time") {
+                            statusHTML = `<span class="badge bg-success">On-Time</span>`;
+                        } else if (compliance.status === "Late") {
+                            statusHTML = `<span class="badge bg-danger">Late</span>`;
+                        } else {
+                            statusHTML = `<span class="badge bg-secondary">Unpaid</span>`;
+                        }
+
+                        complianceHTML += `<li>${compliance.username}: ${statusHTML}</li>`;
+                    });
+                    complianceHTML += '</ul>';
+
+                    billsTableBody.innerHTML += `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>${formatDate(bill.start_date)}</td>
+                            <td>${formatDate(bill.end_date)}</td>
+                            <td>${formatDate(bill.due_date)}</td>
+                            <td>$${bill.bill_total.toFixed(2)}</td>
+                            <td>${complianceHTML}</td>
+                            <td>
+                                <button class="btn btn-warning btn-sm" onclick="editBill(${index})">Edit</button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteBill(${index})">Delete</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
+        }
+
+
+        async function fetchPayments() {
+            const username = localStorage.getItem('username');
+            const userType = localStorage.getItem('user_type');
+
+            const response = await fetch(urlAPI+'payments', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Username': username,
+                    'User-Type': userType
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                return data;
+            } else {
+                console.error('Failed to fetch payments:', response.status);
+                return { success: false };
+            }
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar-placeholder');
+            sidebar.classList.toggle('hidden');
+
+            // Add a click listener to hide the sidebar when clicking outside of it
+            if (!sidebar.classList.contains('hidden')) {
+                document.addEventListener('click', closeSidebarOnClickOutside);
+            } else {
+                document.removeEventListener('click', closeSidebarOnClickOutside);
+            }
+        }
+
+        function closeSidebarOnClickOutside(event) {
+            const sidebar = document.getElementById('sidebar-placeholder');
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            if (!sidebar.contains(event.target) && !hamburgerMenu.contains(event.target)) {
+                sidebar.classList.add('hidden');
+                document.removeEventListener('click', closeSidebarOnClickOutside);
+            }
+        }
+
+        // Ensure the sidebar hides or shows based on screen size during resize
+        window.onresize = function () {
+            const sidebar = document.getElementById('sidebar-placeholder');
+            if (window.innerWidth <= 768) {
+                sidebar.classList.add('hidden');
+            } else {
+                sidebar.classList.remove('hidden');
+            }
+        };
+
+        function populateSidebar() {
+            const userType = localStorage.getItem('user_type');
+            const sidebar = document.querySelector('.sidebar');
+            
+            sidebar.innerHTML = '<h4 class="mx-3 font-weight-bold"><b>Majura184</b></h4>'; // Sidebar header
+
+            const commonItems = [
+                { label: 'Dashboard', icon: 'bi bi-speedometer', link: mainURL+'main.html' }, // Mark as default active
+                { label: 'Reports', icon: 'bi bi-calendar-check', link: 'reports.html' },
+                { label: 'Payments', icon: 'bi bi-currency-exchange', link: 'payments.html' },
+                { label: 'Settings', icon: 'bi bi-gear', link: 'settings.html' },
+                { label: 'Logout', icon: 'bi bi-box-arrow-right', onClick: logout },
+            ];
+
+            const adminItems = [
+                { label: 'Manage Users', icon: 'bi bi-person', link: 'users.html' },
+                { label: 'Manage Bills', icon: 'bi bi-cash', link: mainURL+'bills.html', isDefault: true },
+            ];
+
+            // Merge menus based on user type with "Manage Users" and "Manage Bills" below "Dashboard"
+            const menuItems =
+                userType === 'admin'
+                    ? [commonItems[0], ...adminItems, ...commonItems.slice(1)]
+                    : commonItems;
+
+            // Iterate through the menu items and render them
+            menuItems.forEach((item) => {
+                const link = document.createElement('a');
+                link.href = item.link || '#';
+                link.className = 'menu-item';
+
+                // Add active class to the default menu (Dashboard)
+                if (item.isDefault) {
+                    link.classList.add('active');
+                }
+
+                link.innerHTML = `<i class="${item.icon}"></i> ${item.label}`;
+                if (item.onClick) link.addEventListener('click', item.onClick);
+                sidebar.appendChild(link);
+            });
+        }
+
+        // CSS to style the active menu item
+        document.head.insertAdjacentHTML(
+            'beforeend',
+            `<style>
+                .sidebar .menu-item.active {
+                    background-color: #495057;
+                    color: #fff;
+                    font-weight: bold;
+                }
+            </style>`
+        );
+
+        document.getElementById('bill-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const startDate = document.getElementById('start-date').value;
+            const endDate = document.getElementById('end-date').value;
+            const dueDate = document.getElementById('due-date').value; // Get the Due Date input
+            const billTotal = parseFloat(document.getElementById('bill-total').value);
+            const username = localStorage.getItem('username');
+
+            if (editingIndex === null) {
+                // Add a new bill
+                const response = await fetch(urlAPI+'bills', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ start_date: startDate, end_date: endDate, due_date: dueDate, bill_total: billTotal, username: username }),
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    alert('Bill added successfully!');
+                    fetchBills(); // Refresh the bills table
+                } else {
+                    alert('Failed to add bill. Please try again.');
+                }
+            } else {
+                // Update an existing bill
+                const response = await fetch(`${urlAPI}bills/${editingIndex}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ start_date: startDate, end_date: endDate, due_date: dueDate, bill_total: billTotal, username: username }),
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    alert('Bill updated successfully!');
+                    editingIndex = null; // Reset the editing index
+                    document.querySelector('#bill-form button[type="submit"]').innerText = 'Add Bill'; // Reset button text
+                    fetchBills(); // Refresh the list
+                } else {
+                    alert('Failed to update bill. Please try again.');
+                }
+            }
+
+            // Clear the form fields
+            document.getElementById('start-date').value = '';
+            document.getElementById('end-date').value = '';
+            document.getElementById('due-date').value = ''; // Clear Due Date input
+            document.getElementById('bill-total').value = '';
+        });
+
+        let editingIndex = null; // Keep track of the index of the bill being edited
+
+        // Update the editBill function to include the Due Date
+        function editBill(index) {
+            const billsTableBody = document.getElementById('bills-table-body');
+            const selectedRow = billsTableBody.children[index];
+
+            // Extract data from the selected row
+            const startDate = revFormatDate(selectedRow.children[1].innerText);
+            const endDate = revFormatDate(selectedRow.children[2].innerText);
+            const dueDate = revFormatDate(selectedRow.children[3].innerText); // Extract Due Date
+            const billTotal = parseFloat(selectedRow.children[4].innerText.replace('$', ''));          
+
+            // Populate the form fields with the selected data
+            document.getElementById('start-date').value = startDate;
+            document.getElementById('end-date').value = endDate;
+            document.getElementById('due-date').value = dueDate; // Populate Due Date input
+            document.getElementById('bill-total').value = billTotal.toFixed(2);
+
+            // Set the editing index
+            editingIndex = index;
+
+            // Update the form's submit button to reflect "Update Bill"
+            const submitButton = document.querySelector('#bill-form button[type="submit"]');
+            submitButton.innerText = 'Update Bill';
+        }
+
+        // Delete bill
+        async function deleteBill(index) {
+            const confirmDelete = confirm('Are you sure you want to delete this bill?');
+            if (confirmDelete) {
+                const response = await fetch(`${urlAPI}bills/${index}`, {
+                    method: 'DELETE',
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert('Bill deleted successfully!');
+                    fetchBills(); // Refresh the list after successful deletion
+                } else {
+                    alert('Failed to delete bill. Please try again.');
+                }
+            }
+        }
+
+
+        // Logout function
+        function logout() {
+            localStorage.removeItem('isLoggedIn');
+            localStorage.removeItem('username');
+            localStorage.removeItem('user_type');
+
+            fetch(urlAPI+'logout', {
+                method: 'POST',
+                credentials: 'include',
+            })
+            .then((response) => response.json())
+            .then((data) => {
+                if (data.success) {
+                    window.location.href = 'login.html';
+                } else {
+                    alert('Logout failed. Please try again.');
+                }
+            })
+            .catch((error) => console.error('Logout error:', error));
+        }
+
+        // Initialize components on page load
+        window.onload = loadComponents;
+
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

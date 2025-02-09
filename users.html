@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Majura184: Manage Users</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Sidebar -->
+    <button class="hamburger-menu" onclick="toggleSidebar()">
+        <i class="bi bi-list"></i>
+    </button>
+    <div id="sidebar-placeholder" class="sidebar"></div>
+
+    <!-- Main Content -->
+    <div class="content">
+        <!-- Navbar -->
+        <div id="navbar-placeholder"></div>
+
+        <!-- Page-Specific Content -->
+        <div class="container mt-4">
+            <h3 class="app-subtitle">Manage Users</h3>
+            <div class="form-container">
+                <h5>Add/Edit User</h5>
+                <form id="user-form">
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="full-name" class="form-label">Full Name</label>
+                            <input type="text" id="full-name" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" id="email" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="username" class="form-label">Username</label>
+                            <input type="text" id="username" class="form-control form-control-sm" required>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="password" class="form-label">Password</label>
+                            <input type="password" id="password" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="num-roommates" class="form-label">Number of Roommates</label>
+                            <input type="number" id="num-roommates" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="start-date" class="form-label">Start Date</label>
+                            <input type="date" id="start-date" class="form-control form-control-sm" required>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="user-type" class="form-label">User Type</label>
+                            <select id="user-type" class="form-control  form-control-sm" required>
+                                <option value="user">User</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="active" class="form-label">Active</label>
+                            <select id="active" class="form-control  form-control-sm" required>
+                                <option value="1">Active</option>
+                                <option value="0">Inactive</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add User</button>
+                </form>
+            </div>
+
+            <div class="table-container" style="overflow-x: scroll;">
+                <h5 class="app-subtitle">Users List</h5>
+                <table class="table table-bordered table-sm">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Full Name</th>
+                            <th>Email</th>
+                            <th>Username</th>
+                            <th>Password</th>
+                            <th>Roommates</th>
+                            <th>Start Date</th>
+                            <th>Type</th>
+                            <th>Active</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-table-body">
+                        <!-- Populated dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div id="footer-placeholder"></div>
+    </div>
+
+    <script>
+
+        var stDev = false;
+        var urlAPI='';
+        var mainURL='';
+
+        if(stDev) {
+            urlAPI = 'http://127.0.0.1:5000/';
+            mainURL = 'http://127.0.0.1:3000/';
+        } else {
+            urlAPI = 'https://elecbill-app-latest.onrender.com/';
+            mainURL = 'http://127.0.0.1:3000/';
+        }
+
+        let editingIndex = null; // Track the index of the report being edited
+        
+        async function loadComponents() {
+
+            try {
+                const isLoggedIn = localStorage.getItem('isLoggedIn');
+                const username = localStorage.getItem('username');
+
+                if (!isLoggedIn) {
+                    window.location.href = 'login.html';
+                    return;
+                }
+
+                const navbar = await fetch('navbar.html').then((res) => res.text());
+                const sidebar = await fetch('sidebar.html').then((res) => res.text());
+                const footer = await fetch('footer.html').then((res) => res.text());
+
+                document.getElementById('navbar-placeholder').innerHTML = navbar;
+                document.getElementById('sidebar-placeholder').innerHTML = sidebar;
+                document.getElementById('footer-placeholder').innerHTML = footer;
+
+                document.getElementById('user-name').innerText = username;
+                populateSidebar();
+
+                // Hide sidebar on mobile
+                if (window.innerWidth <= 768) {
+                    document.getElementById('sidebar-placeholder').classList.add('hidden');
+                }
+            } catch (error) {
+                console.error('Failed to load components:', error);
+                alert('An error occurred while loading the page. Please try again later.');
+            }
+
+            fetchUsers();
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar-placeholder');
+            sidebar.classList.toggle('hidden');
+
+            // Add a click listener to hide the sidebar when clicking outside of it
+            if (!sidebar.classList.contains('hidden')) {
+                document.addEventListener('click', closeSidebarOnClickOutside);
+            } else {
+                document.removeEventListener('click', closeSidebarOnClickOutside);
+            }
+        }
+
+        function closeSidebarOnClickOutside(event) {
+            const sidebar = document.getElementById('sidebar-placeholder');
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            if (!sidebar.contains(event.target) && !hamburgerMenu.contains(event.target)) {
+                sidebar.classList.add('hidden');
+                document.removeEventListener('click', closeSidebarOnClickOutside);
+            }
+        }
+
+        // Ensure the sidebar hides or shows based on screen size during resize
+        window.onresize = function () {
+            const sidebar = document.getElementById('sidebar-placeholder');
+            if (window.innerWidth <= 768) {
+                sidebar.classList.add('hidden');
+            } else {
+                sidebar.classList.remove('hidden');
+            }
+        };
+
+        function populateSidebar() {
+            const userType = localStorage.getItem('user_type');
+            const sidebar = document.querySelector('.sidebar');
+            
+            sidebar.innerHTML = '<h4 class="mx-3 font-weight-bold"><b>Majura184</b></h4>'; // Sidebar header
+
+            const commonItems = [
+                { label: 'Dashboard', icon: 'bi bi-speedometer', link: mainURL+'main.html' }, // Mark as default active
+                { label: 'Reports', icon: 'bi bi-calendar-check', link: 'reports.html' },
+                { label: 'Payments', icon: 'bi bi-currency-exchange', link: 'payments.html' },
+                { label: 'Settings', icon: 'bi bi-gear', link: 'settings.html' },
+                { label: 'Logout', icon: 'bi bi-box-arrow-right', onClick: logout },
+            ];
+
+            const adminItems = [
+                { label: 'Manage Users', icon: 'bi bi-person', link: 'users.html', isDefault: true },
+                { label: 'Manage Bills', icon: 'bi bi-cash', link: mainURL+'bills.html'},
+            ];
+
+            // Merge menus based on user type with "Manage Users" and "Manage Bills" below "Dashboard"
+            const menuItems =
+                userType === 'admin'
+                    ? [commonItems[0], ...adminItems, ...commonItems.slice(1)]
+                    : commonItems;
+
+            // Iterate through the menu items and render them
+            menuItems.forEach((item) => {
+                const link = document.createElement('a');
+                link.href = item.link || '#';
+                link.className = 'menu-item';
+
+                // Add active class to the default menu (Dashboard)
+                if (item.isDefault) {
+                    link.classList.add('active');
+                }
+
+                link.innerHTML = `<i class="${item.icon}"></i> ${item.label}`;
+                if (item.onClick) link.addEventListener('click', item.onClick);
+                sidebar.appendChild(link);
+            });
+        }
+
+        // CSS to style the active menu item
+        document.head.insertAdjacentHTML(
+            'beforeend',
+            `<style>
+                .sidebar .menu-item.active {
+                    background-color: #495057;
+                    color: #fff;
+                    font-weight: bold;
+                }
+            </style>`
+        );
+
+        // Utility function to format date
+        function formatDate(dateString) {
+            const [year, month, day] = dateString.split('-');
+            return `${day}-${month}-${year}`;
+        }
+
+        // Utility function to format date
+        function revFormatDate(dateString) {
+            const [day, month, year] = dateString.split('-');
+            return `${year}-${month}-${day}`;
+        }
+
+        async function fetchUsers() {
+            const response = await fetch(urlAPI+'users');
+            const data = await response.json();
+            const usersTableBody = document.getElementById('users-table-body');
+            usersTableBody.innerHTML = '';
+
+            if (data.success) {
+                data.users.forEach((user, index) => {
+                    usersTableBody.innerHTML += `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>${user.full_name}</td>
+                            <td>${user.email}</td>
+                            <td>${user.username}</td>
+                            <td>*****</td>
+                            <td>${user.num_roommates}</td>
+                            <td>${formatDate(user.start_date)}</td>
+                            <td>${user.type}</td>
+                            <td>${user.active}</td>
+                            <td>
+                                <button class="btn btn-warning btn-sm" onclick="editUser(${index})">Edit</button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteUser(${index})">Delete</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
+        }
+
+        function editUser(index) {
+            const usersTableBody = document.getElementById('users-table-body');
+            const selectedRow = usersTableBody.children[index];
+
+            // Extract data from the selected row
+            const fullName = selectedRow.children[1].innerText;
+            const email = selectedRow.children[2].innerText;
+            const username = selectedRow.children[3].innerText;
+            const password = selectedRow.children[4].innerText;
+            const numRoommates = selectedRow.children[5].innerText;
+            const startDate = revFormatDate(selectedRow.children[6].innerText);
+            const userType = selectedRow.children[7].innerText;
+            const active = selectedRow.children[8].innerText;
+
+            // Populate the form fields
+            document.getElementById('full-name').value = fullName;
+            document.getElementById('email').value = email;
+            document.getElementById('username').value = username;
+            document.getElementById('password').value = password;
+            document.getElementById('num-roommates').value = numRoommates;
+            document.getElementById('start-date').value = startDate;
+            document.getElementById('user-type').value = userType;
+            document.getElementById('active').value = active;
+
+            // Set the editing index
+            editingIndex = index;
+
+            // Update the form's submit button to reflect "Update User"
+            const submitButton = document.querySelector('#user-form button[type="submit"]');
+            submitButton.innerText = 'Update User';
+        }
+
+        async function deleteUser(index) {
+            const confirmDelete = confirm('Are you sure you want to delete this user?');
+            if (confirmDelete) {
+                const response = await fetch(`${urlAPI}users/${index}`, {
+                    method: 'DELETE',
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert('User deleted successfully!');
+                    fetchUsers();
+                } else {
+                    alert('Failed to delete user.');
+                }
+            }
+        }
+
+        document.getElementById('user-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const fullName = document.getElementById('full-name').value;
+            const email = document.getElementById('email').value;
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const numRoommates = document.getElementById('num-roommates').value;
+            const startDate = document.getElementById('start-date').value;
+            const userType = document.getElementById('user-type').value;
+            const active = document.getElementById('active').value;
+
+            if (editingIndex === null) {
+                // Add new user
+                const response = await fetch(urlAPI+'users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        full_name: fullName,
+                        email,
+                        username,
+                        password,
+                        num_roommates: numRoommates,
+                        start_date: startDate,
+                        type: userType,
+                        active,
+                    }),
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    alert('User added successfully!');
+                    fetchUsers();
+                } else {
+                    alert('Failed to add user.');
+                }
+            } else {
+                // Update existing user
+                const response = await fetch(`${urlAPI}users/${editingIndex}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        full_name: fullName,
+                        email,
+                        username,
+                        password,
+                        num_roommates: numRoommates,
+                        start_date: startDate,
+                        type: userType,
+                        active,
+                    }),
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    alert('User updated successfully!');
+                    editingIndex = null; // Reset the editing index
+                    document.querySelector('#user-form button[type="submit"]').innerText = 'Add User'; // Reset button text
+                    fetchUsers();
+                } else {
+                    alert('Failed to update user.');
+                }
+            }
+
+            // Clear form fields
+            document.getElementById('full-name').value = '';
+            document.getElementById('email').value = '';
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+            document.getElementById('num-roommates').value = '';
+            document.getElementById('start-date').value = '';
+            document.getElementById('user-type').value = 'user';
+            document.getElementById('active').value = '1';
+        });
+
+        window.onload = loadComponents;
+
+        // Logout function
+        function logout() {
+            localStorage.removeItem('isLoggedIn');
+            localStorage.removeItem('username');
+            localStorage.removeItem('user_type');
+
+            fetch(urlAPI+'logout', {
+                method: 'POST',
+                credentials: 'include',
+            })
+            .then((response) => response.json())
+            .then((data) => {
+                if (data.success) {
+                    window.location.href = 'login.html';
+                } else {
+                    alert('Logout failed. Please try again.');
+                }
+            })
+            .catch((error) => console.error('Logout error:', error));
+        }
+
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
