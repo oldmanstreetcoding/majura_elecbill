@@ -118,7 +118,7 @@
                 }
 
                 if (!isLoggedIn) {
-                    window.location.href = 'login.html';
+                    window.location.href = 'index.html';
                     return;
                 }
 
@@ -455,7 +455,7 @@
             .then((response) => response.json())
             .then((data) => {
                 if (data.success) {
-                    window.location.href = 'login.html';
+                    window.location.href = 'index.html';
                 } else {
                     alert('Logout failed. Please try again.');
                 }
