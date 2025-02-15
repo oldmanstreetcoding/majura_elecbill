@@ -9,6 +9,10 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+    <!-- Progress Bar -->
+    <div id="progress-bar-container">
+        <div id="progress-bar"></div>
+    </div>
     <!-- Sidebar -->
     <button class="hamburger-menu" onclick="toggleSidebar()">
         <i class="bi bi-list"></i>
@@ -61,6 +65,14 @@
                             <input type="text" id="vacation-destination" class="form-control form-control-sm">
                         </div>
                     </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4 admin-only" style="display: none;">
+                            <label for="member-name" class="form-label">Member Name</label>
+                            <select id="member-name" class="form-control form-control-sm">
+                                <!-- Populated dynamically -->
+                            </select>
+                        </div>
+                    </div>
                     <button type="submit" class="btn btn-primary">Submit Report</button>
                 </form>
             </div>
@@ -92,19 +104,19 @@
         <div id="footer-placeholder"></div>
     </div>
 
+    <!-- Bootstrap Toasts -->
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050">
+        <div id="toast-container"></div>
+    </div>
+
     <script>
+        
+        const progressBarContainer = document.getElementById('progress-bar-container');
+        const progressBar = document.getElementById('progress-bar');
 
         var stDev = false;
-        var urlAPI='';
-        var mainURL='';
-
-        if(stDev) {
-            urlAPI = 'http://127.0.0.1:5000/';
-            mainURL = 'http://127.0.0.1:3000/';
-        } else {
-            urlAPI = 'https://elecbill-app-latest.onrender.com/';
-            mainURL = 'https://majurabill.onrender.com/';
-        }
+        var urlAPI = stDev ? 'http://127.0.0.1:5000/' : 'https://elecbill-app-latest.onrender.com/';
+        var mainURL = stDev ? 'http://127.0.0.1:3000/' : 'https://majurabill.onrender.com/';
 
         let editingIndex = null; // Track the index of the report being edited
         
@@ -113,7 +125,14 @@
             try {
                 const isLoggedIn = localStorage.getItem('isLoggedIn');
                 const username = localStorage.getItem('username');
+                const userType = localStorage.getItem('user_type');
 
+                // If user is admin, show member selection dropdown
+                if (userType === 'admin') {
+                    document.querySelector('.admin-only').style.display = 'block';
+                    populateMemberDropdown();
+                }
+                
                 if (!isLoggedIn) {
                     window.location.href = 'index.html';
                     return;
@@ -134,13 +153,37 @@
                 if (window.innerWidth <= 768) {
                     document.getElementById('sidebar-placeholder').classList.add('hidden');
                 }
+                
             } catch (error) {
                 console.error('Failed to load components:', error);
-                alert('An error occurred while loading the page. Please try again later.');
+                showToast('Error', 'An error occurred while loading the page. Please try again later.', 'danger');
             }
 
             fetchReports();
             populateBillPeriods();
+        }
+
+        async function populateMemberDropdown() {
+            try {
+                const response = await fetch(urlAPI + 'users'); // Fetch list of users
+                const data = await response.json();
+
+                if (data.success) {
+                    const memberDropdown = document.getElementById('member-name');
+                    memberDropdown.innerHTML = '<option value="">Select Member</option>'; // Default option
+
+                    data.users.forEach((user) => {
+                        const option = document.createElement('option');
+                        option.value = user.username;
+                        option.text = user.full_name;
+                        memberDropdown.appendChild(option);
+                    });
+                } else {
+                    showToast('Error', 'Failed to fetch members.', 'danger');
+                }
+            } catch (error) {
+                console.error('Error fetching users:', error);
+            }
         }
 
         function toggleSidebar() {
@@ -298,6 +341,7 @@
             const selectedRow = reportsTableBody.children[index];
 
             // Extract data from the selected row
+            const username = selectedRow.children[1].innerText; // Username of the payer
             const type = selectedRow.children[2].innerText;
             const billPeriod = selectedRow.children[3].innerText;
             const startDate = revFormatDate(selectedRow.children[4].innerText);
@@ -313,6 +357,29 @@
             document.getElementById('number-of-guests').value = numberOfGuests;
             document.getElementById('vacation-destination').value = vacationDestination;
 
+            // Automatically select the correct member in the dropdown
+            const memberDropdown = document.getElementById('member-name');
+            
+            if (memberDropdown) {
+                const options = Array.from(memberDropdown.options);
+
+                // Normalize both the dropdown text and username for matching
+                const matchingOption = options.find(option =>
+                    option.innerText.trim().toLowerCase() === username.trim().toLowerCase()
+                );
+
+                // Debugging: log dropdown options and the payer name
+                // console.log("Dropdown Options:", options.map(option => option.innerText.trim().toLowerCase()));
+                // console.log("Payer Name:", username.trim().toLowerCase());
+
+                if (matchingOption) {
+                    memberDropdown.value = matchingOption.value; // Set dropdown to the matching option
+                } else {
+                    console.warn(`No matching dropdown option found for payer: ${username}`);
+                    memberDropdown.value = ''; // Reset to default if no match is found
+                }
+            }
+
             // Set the editing index
             editingIndex = index;
 
@@ -324,13 +391,22 @@
         document.getElementById('report-form').addEventListener('submit', async (e) => {
             e.preventDefault();
 
+            // Show progress bar
+            showProgressBar();
+
             const type = document.getElementById('report-type').value;
             const billPeriod = document.getElementById('bill-period').value;
             const startDate = document.getElementById('start-date').value;
             const endDate = document.getElementById('end-date').value;
             const numberOfGuests = document.getElementById('number-of-guests').value || null;
             const vacationDestination = document.getElementById('vacation-destination').value || null;
-            const username = localStorage.getItem('username');
+            let username = localStorage.getItem('username');
+
+            // If admin, use the selected member instead
+            const memberDropdown = document.getElementById('member-name');
+            if (memberDropdown && memberDropdown.value) {
+                username = memberDropdown.value;
+            }
 
             if (editingIndex === null) {
                 const response = await fetch(urlAPI+'reports', {
@@ -349,11 +425,10 @@
 
                 const data = await response.json();
                 if (data.success) {
-                    alert('Report submitted successfully!');
+                    showToast('Success', 'Report submitted successfully!', 'success');
                     fetchReports();
-
                 } else {
-                    alert('Failed to submit report.');
+                    showToast('Error', 'Failed to submit report.', 'danger');
                 }
             } else {
 
@@ -374,15 +449,19 @@
 
                 const data = await response.json();
                 if (data.success) {
-                    alert('Report updated successfully!');
+                    showToast('Success', 'Report updated successfully!', 'success');
                     editingIndex = null; // Reset the editing index
                     document.querySelector('#report-form button[type="submit"]').innerText = 'Submit Report'; // Reset button text
                     fetchReports();
                 } else {
-                    alert('Failed to update report.');
+                    showToast('Error', 'Failed to update report.', 'danger');
                 }
 
+                hideProgressBar();
+
             }
+
+            document.getElementById('report-form').reset();
 
             // Clear form fields
             document.getElementById('report-type').value = '';
@@ -402,12 +481,57 @@
                 });
                 const data = await response.json();
                 if (data.success) {
-                    alert('Report deleted successfully!');
+                    showToast('Error', 'Report deleted successfully!', 'danger');
                     fetchReports();
                 } else {
-                    alert('Failed to delete report.');
+                    showToast('Error', 'Failed to delete report.', 'danger');
                 }
             }
+        }
+
+        function showProgressBar() {
+            progressBarContainer.style.display = 'block';
+            progressBar.style.width = '0%';
+
+            setTimeout(() => {
+                progressBar.style.width = '50%';
+            }, 200);
+
+            setTimeout(() => {
+                progressBar.style.width = '75%';
+            }, 400);
+        }
+
+        function hideProgressBar() {
+            setTimeout(() => {
+                progressBar.style.width = '100%';
+                setTimeout(() => {
+                    progressBarContainer.style.display = 'none';
+                    progressBar.style.width = '0%';
+                }, 500);
+            }, 300);
+        }
+
+        function showToast(title, message, type = 'info') {
+            const toastContainer = document.getElementById('toast-container');
+            const toastId = `toast-${Date.now()}`;
+            const toastHTML = `
+                <div id="${toastId}" class="toast align-items-center text-bg-${type} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            <strong>${title}</strong>: ${message}
+                        </div>
+                        <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>
+            `;
+            toastContainer.innerHTML += toastHTML;
+            const toastElement = document.getElementById(toastId);
+            const toastInstance = new bootstrap.Toast(toastElement);
+            toastInstance.show();
+            setTimeout(() => {
+                toastElement.remove();
+            }, 4000);
         }
 
         window.onload = loadComponents;
@@ -427,7 +551,7 @@
                 if (data.success) {
                     window.location.href = 'index.html';
                 } else {
-                    alert('Logout failed. Please try again.');
+                    showToast('Error', 'Logout failed. Please try again.', 'danger');
                 }
             })
             .catch((error) => console.error('Logout error:', error));

@@ -65,6 +65,11 @@
     </style>
 </head>
 <body>
+    <!-- Progress Bar -->
+    <div id="progress-bar-container">
+        <div id="progress-bar"></div>
+    </div>
+    
     <!-- Sidebar -->
     <button class="hamburger-menu" onclick="toggleSidebar()">
         <i class="bi bi-list"></i>
@@ -129,19 +134,19 @@
         <div id="footer-placeholder"></div>
     </div>
 
-    <script>
-    
-        var stDev = false;
-        var urlAPI='';
-        var mainURL='';
+    <!-- Bootstrap Toasts -->
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050">
+        <div id="toast-container"></div>
+    </div>
 
-        if(stDev) {
-            urlAPI = 'http://127.0.0.1:5000/';
-            mainURL = 'http://127.0.0.1:3000/';
-        } else {
-            urlAPI = 'https://elecbill-app-latest.onrender.com/';
-            mainURL = 'https://majurabill.onrender.com/';
-        }
+    <script>
+        
+        const progressBarContainer = document.getElementById('progress-bar-container');
+        const progressBar = document.getElementById('progress-bar');
+
+        var stDev = false;
+        var urlAPI = stDev ? 'http://127.0.0.1:5000/' : 'https://elecbill-app-latest.onrender.com/';
+        var mainURL = stDev ? 'http://127.0.0.1:3000/' : 'https://majurabill.onrender.com/';
 
         // Load reusable components
         async function loadComponents() {
@@ -187,6 +192,29 @@
             return `${day}-${month}-${year}`;
         }
 
+        function showProgressBar() {
+            progressBarContainer.style.display = 'block';
+            progressBar.style.width = '0%';
+
+            setTimeout(() => {
+                progressBar.style.width = '50%';
+            }, 200);
+
+            setTimeout(() => {
+                progressBar.style.width = '75%';
+            }, 400);
+        }
+
+        function hideProgressBar() {
+            setTimeout(() => {
+                progressBar.style.width = '100%';
+                setTimeout(() => {
+                    progressBarContainer.style.display = 'none';
+                    progressBar.style.width = '0%';
+                }, 500);
+            }, 300);
+        }
+
         async function populateBillPeriodDropdown() {
             try {
                 const response = await fetch(urlAPI+'bill-periods');
@@ -215,6 +243,9 @@
                     const [start_date, end_date] = selectedPeriod.split('|');
                     url += `?start_date=${start_date}&end_date=${end_date}`;
                 }
+
+                // Show progress bar
+                showProgressBar();
 
                 const response = await fetch(url);
                 const data = await response.json();
@@ -350,6 +381,8 @@
                     footerRow.appendChild(grandTotalCell);
 
                     tableBody.appendChild(footerRow);
+
+                    hideProgressBar();
                 }
             } catch (error) {
                 console.error('Error loading dashboard data:', error);
@@ -466,6 +499,28 @@
                 }
             })
             .catch((error) => console.error('Logout error:', error));
+        }
+
+        function showToast(title, message, type = 'info') {
+            const toastContainer = document.getElementById('toast-container');
+            const toastId = `toast-${Date.now()}`;
+            const toastHTML = `
+                <div id="${toastId}" class="toast align-items-center text-bg-${type} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            <strong>${title}</strong>: ${message}
+                        </div>
+                        <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>
+            `;
+            toastContainer.innerHTML += toastHTML;
+            const toastElement = document.getElementById(toastId);
+            const toastInstance = new bootstrap.Toast(toastElement);
+            toastInstance.show();
+            setTimeout(() => {
+                toastElement.remove();
+            }, 4000);
         }
 
         // Initialize components on page load

@@ -9,6 +9,10 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+    <!-- Progress Bar -->
+    <div id="progress-bar-container">
+        <div id="progress-bar"></div>
+    </div>
     <!-- Sidebar -->
     <button class="hamburger-menu" onclick="toggleSidebar()">
         <i class="bi bi-list"></i>
@@ -102,19 +106,19 @@
         <div id="footer-placeholder"></div>
     </div>
 
+    <!-- Bootstrap Toasts -->
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050">
+        <div id="toast-container"></div>
+    </div>
+
     <script>
 
-        var stDev = false;
-        var urlAPI='';
-        var mainURL='';
+        const progressBarContainer = document.getElementById('progress-bar-container');
+        const progressBar = document.getElementById('progress-bar');
 
-        if(stDev) {
-            urlAPI = 'http://127.0.0.1:5000/';
-            mainURL = 'http://127.0.0.1:3000/';
-        } else {
-            urlAPI = 'https://elecbill-app-latest.onrender.com/';
-            mainURL = 'https://majurabill.onrender.com/';
-        }
+        var stDev = false;
+        var urlAPI = stDev ? 'http://127.0.0.1:5000/' : 'https://elecbill-app-latest.onrender.com/';
+        var mainURL = stDev ? 'http://127.0.0.1:3000/' : 'https://majurabill.onrender.com/';
 
         let editingIndex = null; // Track the index of the report being edited
         
@@ -146,7 +150,7 @@
                 }
             } catch (error) {
                 console.error('Failed to load components:', error);
-                alert('An error occurred while loading the page. Please try again later.');
+                showToast('Error', 'An error occurred while loading the page. Please try again later.', 'danger');
             }
 
             fetchUsers();
@@ -318,16 +322,19 @@
                 });
                 const data = await response.json();
                 if (data.success) {
-                    alert('User deleted successfully!');
+                    showToast('Success', 'User deleted successfully!', 'success');
                     fetchUsers();
                 } else {
-                    alert('Failed to delete user.');
+                    showToast('Error', 'Failed to delete user.', 'danger');
                 }
             }
         }
 
         document.getElementById('user-form').addEventListener('submit', async (e) => {
             e.preventDefault();
+
+            // Show progress bar
+            showProgressBar();
 
             const fullName = document.getElementById('full-name').value;
             const email = document.getElementById('email').value;
@@ -357,10 +364,10 @@
 
                 const data = await response.json();
                 if (data.success) {
-                    alert('User added successfully!');
+                    showToast('Success', 'User added successfully!', 'success');
                     fetchUsers();
                 } else {
-                    alert('Failed to add user.');
+                    showToast('Error', 'Failed to add user.', 'danger');
                 }
             } else {
                 // Update existing user
@@ -381,14 +388,16 @@
 
                 const data = await response.json();
                 if (data.success) {
-                    alert('User updated successfully!');
+                    showToast('Success', 'User updated successfully!', 'success');
                     editingIndex = null; // Reset the editing index
                     document.querySelector('#user-form button[type="submit"]').innerText = 'Add User'; // Reset button text
                     fetchUsers();
                 } else {
-                    alert('Failed to update user.');
+                    showToast('Error', 'Failed to update user.', 'danger');
                 }
             }
+
+            hideProgressBar();
 
             // Clear form fields
             document.getElementById('full-name').value = '';
@@ -400,6 +409,51 @@
             document.getElementById('user-type').value = 'user';
             document.getElementById('active').value = '1';
         });
+
+        function showProgressBar() {
+            progressBarContainer.style.display = 'block';
+            progressBar.style.width = '0%';
+
+            setTimeout(() => {
+                progressBar.style.width = '50%';
+            }, 200);
+
+            setTimeout(() => {
+                progressBar.style.width = '75%';
+            }, 400);
+        }
+
+        function hideProgressBar() {
+            setTimeout(() => {
+                progressBar.style.width = '100%';
+                setTimeout(() => {
+                    progressBarContainer.style.display = 'none';
+                    progressBar.style.width = '0%';
+                }, 500);
+            }, 300);
+        }
+
+        function showToast(title, message, type = 'info') {
+            const toastContainer = document.getElementById('toast-container');
+            const toastId = `toast-${Date.now()}`;
+            const toastHTML = `
+                <div id="${toastId}" class="toast align-items-center text-bg-${type} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            <strong>${title}</strong>: ${message}
+                        </div>
+                        <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>
+            `;
+            toastContainer.innerHTML += toastHTML;
+            const toastElement = document.getElementById(toastId);
+            const toastInstance = new bootstrap.Toast(toastElement);
+            toastInstance.show();
+            setTimeout(() => {
+                toastElement.remove();
+            }, 4000);
+        }
 
         window.onload = loadComponents;
 
@@ -418,7 +472,7 @@
                 if (data.success) {
                     window.location.href = 'index.html';
                 } else {
-                    alert('Logout failed. Please try again.');
+                    showToast('Error', 'Logout failed. Please try again.', 'danger');
                 }
             })
             .catch((error) => console.error('Logout error:', error));
