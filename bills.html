@@ -45,23 +45,38 @@
                 <h5>Add New Bill</h5>
                 <form id="bill-form">
                     <div class="row mb-3">
-                        <div class="col-md-3">
-                            <label for="start-date" class="form-label">Start Date</label>
-                            <input type="date" id="start-date" class="form-control form-control-sm" required>
+                        <!-- Left Section (3 inputs) -->
+                        <div class="col-md-8">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <label for="start-date" class="form-label">Start Date</label>
+                                    <input type="date" id="start-date" class="form-control form-control-sm" required>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="end-date" class="form-label">End Date</label>
+                                    <input type="date" id="end-date" class="form-control form-control-sm" required>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="report-due-date" class="form-label">Report Due Date</label>
+                                    <input type="date" id="report-due-date" class="form-control form-control-sm" required>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-md-3">
-                            <label for="end-date" class="form-label">End Date</label>
-                            <input type="date" id="end-date" class="form-control form-control-sm" required>
+                    
+                        <!-- Right Section (2 inputs) -->
+                        <div class="col-md-4">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label for="payment-due-date" class="form-label">Payment Due Date</label>
+                                    <input type="date" id="payment-due-date" class="form-control form-control-sm" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="bill-total" class="form-label">Bill Total</label>
+                                    <input type="number" id="bill-total" class="form-control form-control-sm" step="0.01" required>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-md-3">
-                            <label for="due-date" class="form-label">Due Date</label>
-                            <input type="date" id="due-date" class="form-control form-control-sm" required>
-                        </div>
-                        <div class="col-md-3">
-                            <label for="bill-total" class="form-label">Bill Total</label>
-                            <input type="number" id="bill-total" class="form-control form-control-sm" step="0.01" required>
-                        </div>
-                    </div>
+                    </div>                    
                     <button type="submit" class="btn btn-primary">Add Bill</button>
                 </form>
             </div>
@@ -74,8 +89,11 @@
                             <th>#</th>
                             <th>Start Date</th>
                             <th>End Date</th>
-                            <th>Due Date</th>
+                            <th>Report Due Date</th>
                             <th>Bill Total</th>
+                            <th>Report Reminder</th>
+                            <th>Payment Reminder</th>
+                            <th>Payment Due Date</th>
                             <th>Compliance</th>
                             <th>Action</th>
                         </tr>
@@ -97,18 +115,22 @@
         <div id="toast-container"></div>
     </div>
 
+    <script src="config.js"></script>  <!-- Load global config -->
+
     <script>
 
         const progressBarContainer = document.getElementById('progress-bar-container');
         const progressBar = document.getElementById('progress-bar');
 
-        var stDev = false;
         var urlAPI = stDev ? 'http://127.0.0.1:5000/' : 'https://elecbill-app-latest.onrender.com/';
         var mainURL = stDev ? 'http://127.0.0.1:3000/' : 'https://majurabill.onrender.com/';     
         
         // Load reusable components
         async function loadComponents() {
             try {
+
+                showProgressBar();
+
                 const isLoggedIn = localStorage.getItem('isLoggedIn');
                 const username = localStorage.getItem('username');
 
@@ -170,6 +192,9 @@
                 billsData.bills.forEach((bill, index) => {
                     const billPeriod = `${bill.start_date} to ${bill.end_date}`;
                     const dueDate = bill.due_date;
+                    const paymentDueDate = bill.payment_due_date;
+                    const report_reminder = bill.report_remainder === "1" ? "Yes" : "No"; // Convert '1' to 'Yes' and '0' to 'No'
+                    const payment_reminder = bill.payment_remainder === "1" ? "Yes" : "No"; // Convert '1' to 'Yes' and '0' to 'No'
 
                     let complianceHTML = '<ul>';
                     bill.compliance.forEach((compliance) => {
@@ -195,17 +220,78 @@
                             <td>${formatDate(bill.end_date)}</td>
                             <td>${formatDate(bill.due_date)}</td>
                             <td>$${bill.bill_total.toFixed(2)}</td>
+                            <td>${report_reminder}</td>
+                            <td>${payment_reminder}</td>
+                            <td>${formatDate(bill.payment_due_date)}</td>
                             <td>${complianceHTML}</td>
                             <td>
                                 <button class="btn btn-warning btn-sm" onclick="editBill(${index})">Edit</button>
                                 <button class="btn btn-danger btn-sm" onclick="deleteBill(${index})">Delete</button>
+                                <button class="btn btn-info btn-sm" onclick="sendReminder(${index})">Reminder</button>
                             </td>
                         </tr>
                     `;
                 });
+
+                hideProgressBar();
             }
+
         }
 
+        async function sendReminder(index) {
+            const billsTableBody = document.getElementById('bills-table-body');
+            const selectedRow = billsTableBody.children[index];
+
+             // Extract bill data directly from the table row
+            const startDate = revFormatDate(selectedRow.children[1].innerText);
+            const endDate = revFormatDate(selectedRow.children[2].innerText);
+            const billTotal = parseFloat(selectedRow.children[4].innerText.replace("$", ""));
+            const dueDate = revFormatDate(selectedRow.children[3].innerText); // Format date
+            const paymentDueDate = revFormatDate(selectedRow.children[7].innerText);
+            
+            try {
+
+                showProgressBar(); // Show progress while sending reminders
+
+                const response = await fetch(`${urlAPI}send-reminder`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        start_date: startDate,
+                        end_date: endDate,
+                        bill_total: billTotal,
+                        due_date: dueDate,
+                        payment_due_date: paymentDueDate
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast("Success", `${data.count} members reminded successfully!`, "success");
+
+                    // Update reminder status in the backend
+                    await fetch(`${urlAPI}update-reminder-status`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ start_date: startDate, end_date: endDate })
+                    });
+
+                    fetchBills(); // Refresh the bills table to reflect updated reminder status
+                    
+                } else {
+                    showToast("Error", data.message || "Failed to send reminders.", "danger");
+                }
+
+                hideProgressBar();  // Hide progress bar
+
+            } catch (error) {
+                hideProgressBar();  // Hide progress bar
+                showToast("Error", "An error occurred while sending reminders.", "danger");
+                console.error("Reminder error:", error);
+            }
+
+        }
 
         async function fetchPayments() {
             const username = localStorage.getItem('username');
@@ -317,12 +403,12 @@
         document.getElementById('bill-form').addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            // Show progress bar
             showProgressBar();
 
             const startDate = document.getElementById('start-date').value;
             const endDate = document.getElementById('end-date').value;
-            const dueDate = document.getElementById('due-date').value; // Get the Due Date input
+            const dueDate = document.getElementById('report-due-date').value;
+            const paymentDueDate = document.getElementById('payment-due-date').value;
             const billTotal = parseFloat(document.getElementById('bill-total').value);
             const username = localStorage.getItem('username');
 
@@ -331,22 +417,24 @@
                 const response = await fetch(urlAPI+'bills', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ start_date: startDate, end_date: endDate, due_date: dueDate, bill_total: billTotal, username: username }),
+                    body: JSON.stringify({ start_date: startDate, end_date: endDate, due_date: dueDate, bill_total: billTotal, username: username, payment_due_date: paymentDueDate }),
                 });
 
                 const data = await response.json();
                 if (data.success) {
+                    hideProgressBar();
                     showToast('Success', 'Bill added successfully!', 'success');
                     fetchBills(); // Refresh the bills table
                 } else {
                     showToast('Error', 'Failed to add bill. Please try again.', 'danger');
+                    hideProgressBar();
                 }
             } else {
                 // Update an existing bill
                 const response = await fetch(`${urlAPI}bills/${editingIndex}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ start_date: startDate, end_date: endDate, due_date: dueDate, bill_total: billTotal, username: username }),
+                    body: JSON.stringify({ start_date: startDate, end_date: endDate, due_date: dueDate, bill_total: billTotal, username: username, payment_due_date: paymentDueDate }),
                 });
 
                 const data = await response.json();
@@ -354,18 +442,19 @@
                     showToast('Success', 'Bill updated successfully!', 'success');
                     editingIndex = null; // Reset the editing index
                     document.querySelector('#bill-form button[type="submit"]').innerText = 'Add Bill'; // Reset button text
+                    hideProgressBar();
                     fetchBills(); // Refresh the list
                 } else {
                     showToast('Error', 'Failed to update bill. Please try again.', 'danger');
+                    hideProgressBar();
                 }
             }
-
-            hideProgressBar();
 
             // Clear the form fields
             document.getElementById('start-date').value = '';
             document.getElementById('end-date').value = '';
-            document.getElementById('due-date').value = ''; // Clear Due Date input
+            document.getElementById('report-due-date').value = '';
+            document.getElementById('payment-due-date').value = '';
             document.getElementById('bill-total').value = '';
         });
 
@@ -379,13 +468,15 @@
             // Extract data from the selected row
             const startDate = revFormatDate(selectedRow.children[1].innerText);
             const endDate = revFormatDate(selectedRow.children[2].innerText);
-            const dueDate = revFormatDate(selectedRow.children[3].innerText); // Extract Due Date
+            const dueDate = revFormatDate(selectedRow.children[3].innerText);
+            const paymentDueDate = revFormatDate(selectedRow.children[7].innerText);
             const billTotal = parseFloat(selectedRow.children[4].innerText.replace('$', ''));          
 
             // Populate the form fields with the selected data
             document.getElementById('start-date').value = startDate;
             document.getElementById('end-date').value = endDate;
-            document.getElementById('due-date').value = dueDate; // Populate Due Date input
+            document.getElementById('report-due-date').value = dueDate; // Populate Due Date input
+            document.getElementById('payment-due-date').value = paymentDueDate;
             document.getElementById('bill-total').value = billTotal.toFixed(2);
 
             // Set the editing index

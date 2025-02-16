@@ -96,7 +96,8 @@
                             <select id="bill-period-dropdown" onchange="refreshDashboard()">
                                 <option value="" disabled selected>Loading...</option>
                             </select>
-                        </p>                    
+                        </p>
+                        <p><strong>Due Date:</strong> <span id="due-date" style="font-weight: bold;">Loading...</span></p>                    
                         <p><strong>Total Bill: $<span id="total-bill">Loading...</span></strong></p>
                         <p><strong>Total Days:</strong> <span id="total-days">Loading...</span></p>
                         <p><strong>Average Per Day:</strong> $<span id="average-per-day">Loading...</span></p>
@@ -125,8 +126,16 @@
                                 </tbody>
                             </table>
                         </div>
+
+                        <div id="admin-reminder-container" class="text-end m-3 justify-content-end">
+                            <button id="reminder-payment-btn" class="btn btn-danger" style="display: none;" onclick="sendPaymentReminder()">
+                                🔔 Reminder Payment
+                            </button>
+                        </div>
                     </div>
                 </div>
+
+                
             </div>
         </div>
 
@@ -139,12 +148,13 @@
         <div id="toast-container"></div>
     </div>
 
+    <script src="config.js"></script>  <!-- Load global config -->
+
     <script>
         
         const progressBarContainer = document.getElementById('progress-bar-container');
         const progressBar = document.getElementById('progress-bar');
 
-        var stDev = false;
         var urlAPI = stDev ? 'http://127.0.0.1:5000/' : 'https://elecbill-app-latest.onrender.com/';
         var mainURL = stDev ? 'http://127.0.0.1:3000/' : 'https://majurabill.onrender.com/';
 
@@ -153,6 +163,7 @@
             try {
                 const isLoggedIn = localStorage.getItem('isLoggedIn');
                 const username = localStorage.getItem('username');
+                const userType = localStorage.getItem('user_type');
 
                 if (!isLoggedIn) {
                     window.location.href = 'index.html';
@@ -173,6 +184,11 @@
                 // Hide sidebar on mobile
                 if (window.innerWidth <= 768) {
                     document.getElementById('sidebar-placeholder').classList.add('hidden');
+                }
+
+                // Show the "Reminder Payment" button only for admins
+                if (userType === 'admin') {
+                    document.getElementById('reminder-payment-btn').style.display = 'block';
                 }
 
                 // Fetch and populate bill periods
@@ -214,6 +230,91 @@
                 }, 500);
             }, 300);
         }
+
+        async function sendPaymentReminder() {
+            try {
+                showProgressBar();
+
+                // Extract latest bill information dynamically from UI
+                const selectedPeriod = document.getElementById('bill-period-dropdown').value;
+                const dueDateElement = document.getElementById('due-date').textContent;
+                const totalBillElement = document.getElementById('total-bill').textContent.replace('$', '');
+
+                if (!selectedPeriod || !dueDateElement || !totalBillElement) {
+                    showToast("Error", "Missing bill information. Please refresh and try again.", "danger");
+                    hideProgressBar();
+                    return;
+                }
+
+                // Format the data to send in request
+                const [start_date, end_date] = selectedPeriod.split("|");
+                const due_date = dueDateElement.split('-').reverse().join('-'); // Convert format to YYYY-MM-DD
+                const total_bill = parseFloat(totalBillElement);
+
+                // Extract unpaid members and their split bill amounts
+                const unpaidMembers = {};
+                const tableHeader = document.getElementById('table-header').getElementsByTagName('th');
+                const footerRow = document.getElementById('table-body').lastElementChild.getElementsByTagName('td');
+
+                for (let i = 1; i < tableHeader.length - 1; i++) {
+                    const username = tableHeader[i].textContent.trim();
+                    const splitBillAmount = parseFloat(footerRow[i].textContent.replace('$', '').trim()) || 0;
+
+                    if (splitBillAmount > 0) {
+                        unpaidMembers[username] = splitBillAmount;
+                    }
+                }
+
+                if (Object.keys(unpaidMembers).length === 0) {
+                    showToast("Info", "All house members have paid their bills.", "info");
+                    hideProgressBar();
+                    return;
+                }
+
+                // Convert report due date to a Date object
+                const reportDueDate = new Date(due_date);
+                const today = new Date();
+
+                // Check if report due date has passed before sending reminders
+                if (today < reportDueDate) {
+                    const confirmReminder = confirm(
+                        "The report due date has not passed yet. Are you sure you want to remind members to pay?"
+                    );
+                    if (!confirmReminder) {
+                        hideProgressBar();
+                        return;
+                    }
+                }                
+
+                // Fetch unpaid members & bill due dates in one request
+                const response = await fetch(`${urlAPI}send-payment-reminder`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        start_date: start_date,
+                        end_date: end_date,
+                        due_date: due_date,
+                        unpaid_members: unpaidMembers
+                    })
+                });
+
+                const data = await response.json();
+                hideProgressBar();
+
+                if (!data.success) {
+                    showToast("Error", data.message || "Failed to send payment reminders.", "danger");
+                    return;
+                }
+
+                showToast("Success", "Payment reminders sent successfully!", "success");
+
+            } catch (error) {
+                hideProgressBar();
+                console.error("Reminder Payment error:", error);
+                showToast("Error", "An error occurred while sending payment reminders.", "danger");
+            }
+        }
+
 
         async function populateBillPeriodDropdown() {
             try {
@@ -258,6 +359,27 @@
                     document.getElementById('total-bill').textContent = data.total_bill.toFixed(2);
                     document.getElementById('total-days').textContent = data.total_days;
                     document.getElementById('average-per-day').textContent = data.average_per_day.toFixed(2);
+
+                    // Format Due Date to dd-mm-yyyy
+                    function formatDate(dateString) {
+                        const [year, month, day] = dateString.split('-');
+                        return `${day}-${month}-${year}`;
+                    }
+
+                    // Get current date to compare due date
+                    const currentDate = new Date().toISOString().split('T')[0];
+                    const formattedDueDate = formatDate(data.due_date);
+
+                    // Select due date span element
+                    const dueDateElement = document.getElementById('due-date');
+                    dueDateElement.textContent = formattedDueDate;
+
+                    // Apply color: Red if passed, Green if still valid
+                    if (data.due_date < currentDate) {
+                        dueDateElement.style.color = 'red';
+                    } else {
+                        dueDateElement.style.color = 'green';
+                    }
 
                     // Populate compliance list
                     const complianceList = document.getElementById('compliance-list');

@@ -79,6 +79,7 @@
         <div class="alert alert-success mt-3" id="login-success">Login successful! Redirecting...</div>
     </div>
 
+    <script src="config.js"></script>  <!-- Load global config -->
     <script>
 
         const loginForm = document.getElementById('auth-form');
@@ -88,7 +89,6 @@
         const progressBarContainer = document.getElementById('progress-bar-container');
         const progressBar = document.getElementById('progress-bar');
 
-        var stDev = false;
         var urlAPI = stDev ? 'http://127.0.0.1:5000/' : 'https://elecbill-app-latest.onrender.com/';
 
         loginForm.addEventListener('submit', async (e) => {

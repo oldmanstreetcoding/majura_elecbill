@@ -98,12 +98,13 @@
         <div id="toast-container"></div>
     </div>
 
+    <script src="config.js"></script>  <!-- Load global config -->
+
     <script>
 
         const progressBarContainer = document.getElementById('progress-bar-container');
         const progressBar = document.getElementById('progress-bar');
 
-        var stDev = false;
         var urlAPI = stDev ? 'http://127.0.0.1:5000/' : 'https://elecbill-app-latest.onrender.com/';
         var mainURL = stDev ? 'http://127.0.0.1:3000/' : 'https://majurabill.onrender.com/';
 
@@ -135,6 +136,9 @@
                 document.getElementById('footer-placeholder').innerHTML = footer;
 
                 document.getElementById('user-name').innerText = username;
+
+                showProgressBar();
+
                 populateSidebar();
 
                 // Hide sidebar on mobile
@@ -304,6 +308,8 @@
             } else {
                 showToast('Error', 'Failed to fetch payments. Please try again.', 'danger');
             }
+
+            hideProgressBar();
         }
 
 
