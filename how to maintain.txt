@@ -1,0 +1,2 @@
+- change development status in config.js
+- for development env, you should run : python dockerize/backend.py
